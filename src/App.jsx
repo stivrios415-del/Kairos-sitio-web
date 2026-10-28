@@ -16,7 +16,8 @@ import Bienvenida from './pages/Bienvenida'; // 1. Agregado
 function Protegida({ children }) {
   const { session, perfil, loading } = useAuth();
   if (loading) return <div className="center">Cargando…</div>;
-  
+
+
   // 2. Redirige a la bienvenida
   if (!session || !perfil) return <Navigate to="/bienvenida" replace />;
   if (perfil.rol === 'independiente' && !perfil.activo) return <Vencida />;
