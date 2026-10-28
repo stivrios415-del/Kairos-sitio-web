@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiPlus, FiEdit2, FiTrash2, FiUser, FiSearch } from 'react-icons/fi';
 import { api } from '../../lib/api';
 import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
+import FotoEstudiante from '../../components/FotoEstudiante';
 
 const VACIO = { cedula: '', nombre: '', apellido: '', grado: '', seccion: '', carrera: '', foto_url: '' };
 const LIMITE = 100;
@@ -18,6 +19,7 @@ export default function Estudiantes() {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState(VACIO);
   const [guardando, setGuardando] = useState(false);
+  const [fotoPendiente, setFotoPendiente] = useState(null);
   const [aviso, setAviso] = useState(null);
 
   const cargar = useCallback(async () => {
@@ -55,9 +57,11 @@ export default function Estudiantes() {
       cedula: e.cedula, nombre: e.nombre || '', apellido: e.apellido || '', grado: String(e.grado ?? ''),
       seccion: e.seccion || '', carrera: e.carrera || '', foto_url: e.foto_url || '',
     } : VACIO);
+    setFotoPendiente(null); // ✅ Limpiar la foto pendiente al abrir el modal
     setModal(true);
   };
 
+  // ✅ REEMPLAZADO: Lógica para guardar y subir la foto
   const guardar = async (ev) => {
     ev.preventDefault();
     if (!editando && !/^\d{13}$/.test(form.cedula)) {
@@ -71,11 +75,29 @@ export default function Estudiantes() {
       await api(editando ? `/estudiantes/${editando.cedula}` : '/estudiantes', {
         method: editando ? 'PUT' : 'POST', body: form,
       });
+
+      let falloFoto = '';
+      if (fotoPendiente) {
+        try {
+          const fd = new FormData();
+          fd.append('foto', fotoPendiente, 'foto.jpg');
+          await api(`/estudiante-fotos/${form.cedula}`, { method: 'POST', body: fd });
+        } catch (e) {
+          falloFoto = ` Pero la foto no se pudo subir: ${e.message}`;
+        }
+      }
+
       setModal(false);
-      setAviso({ tipo: 'ok', texto: editando ? 'Estudiante actualizado.' : 'Estudiante creado.' });
+      setAviso({
+        tipo: falloFoto ? 'error' : 'ok',
+        texto: (editando ? 'Estudiante actualizado.' : 'Estudiante creado.') + falloFoto,
+      });
       cargar();
-    } catch (err) { setAviso({ tipo: 'error', texto: err.message }); }
-    finally { setGuardando(false); }
+    } catch (err) { 
+      setAviso({ tipo: 'error', texto: err.message }); 
+    } finally { 
+      setGuardando(false); 
+    }
   };
 
   const eliminar = async (e) => {
@@ -177,7 +199,16 @@ export default function Estudiantes() {
                 {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
-            <label>URL de la foto (opcional)<input value={form.foto_url} onChange={set('foto_url')} /></label>
+
+            {/* ✅ REEMPLAZADO: Componente visual de foto */}
+            <FotoEstudiante
+              iniciales={iniciales(form)}
+              urlActual={form.foto_url}
+              pendiente={fotoPendiente}
+              onElegida={setFotoPendiente}
+              onQuitar={() => { setFotoPendiente(null); setForm({ ...form, foto_url: '' }); }}
+            />
+
             <div className="fila">
               <Btn type="button" variant="sec" onClick={() => setModal(false)}>Cancelar</Btn>
               <Btn variant="s" disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</Btn>
