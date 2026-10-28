@@ -4,13 +4,22 @@ import {
   IoTrashOutline, IoRefreshOutline,
 } from 'react-icons/io5';
 import { supabase } from '../lib/supabase';
-import { api } from '../lib/api';
+import { api, fechaHoy } from '../lib/api'; // ✅ FIX: import duplicado eliminado
 import { useAuth } from '../context/AuthContext';
 import QrScanner from '../components/QrScanner';
 import { Btn, Aviso } from '../components/ui';
+import CamaraEvidencia, { obtenerUbicacionWeb } from '../components/CamaraEvidencia';
+
+// ✅ FIX: crypto.randomUUID no existe en navegadores viejos / contextos no seguros
+const nuevoClienteId = () =>
+  (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `c_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 export default function Asistencia() {
   const { perfil } = useAuth();
+
+  // ── Clases y lista del día ──
   const [clases, setClases] = useState([]);
   const [clase, setClase] = useState(null);
   const [lista, setLista] = useState([]);
@@ -21,10 +30,36 @@ export default function Asistencia() {
   const [eliminandoId, setEliminandoId] = useState(null);
   const inputRef = useRef(null);
 
+  // ✅ FIX: todos los estados de evidencia ahora viven DENTRO del componente
+  const [requiere, setRequiere] = useState(!!perfil?.instituciones?.requiere_evidencia);
+  const [evidencias, setEvidencias] = useState({ total: 0, fotos: [] });
+  const [camaraEvid, setCamaraEvid] = useState(false);
+  const [subiendoEvid, setSubiendoEvid] = useState(false);
+
+  // ✅ FIX: `inst` no existía. La fuente de verdad es /instituciones/mia
+  // (ese endpoint ya devuelve requiere_evidencia).
+  useEffect(() => {
+    let vivo = true;
+    api('/instituciones/mia')
+      .then((d) => { if (vivo) setRequiere(!!d?.requiere_evidencia); })
+      .catch(() => { /* si falla, se queda el valor del perfil */ });
+    return () => { vivo = false; };
+  }, []);
+
   const cargarLista = useCallback(async () => {
     try { setLista(await api('/asistencia/hoy', { params: { profesorEmail: perfil.email } })); }
     catch (e) { setAviso({ tipo: 'error', texto: e.message }); }
   }, [perfil.email]);
+
+  // ✅ FIX: cargarEvidencias movido dentro del componente
+  const cargarEvidencias = useCallback(async () => {
+    if (!requiere || !clase) { setEvidencias({ total: 0, fotos: [] }); return; }
+    try {
+      setEvidencias(await api(`/asistencia/evidencia/${clase.id}`, { params: { fecha: fechaHoy() } }));
+    } catch {
+      setEvidencias({ total: 0, fotos: [] });
+    }
+  }, [requiere, clase]);
 
   useEffect(() => {
     supabase.from('materias').select('*').eq('profesor_id', perfil.id)
@@ -33,6 +68,8 @@ export default function Asistencia() {
     const t = setInterval(cargarLista, 30000);
     return () => clearInterval(t);
   }, [perfil.id, cargarLista]);
+
+  useEffect(() => { cargarEvidencias(); }, [cargarEvidencias]);
 
   const visibles = useMemo(() => {
     if (!clase) return lista;
@@ -72,8 +109,44 @@ export default function Asistencia() {
     }
   };
 
+  // ✅ FIX: subirFoto movido dentro del componente + validaciones extra
+  const subirFoto = async (blob) => {
+    setCamaraEvid(false);
+    if (!clase) { setAviso({ tipo: 'error', texto: 'Selecciona una clase primero.' }); return; }
+    if (evidencias.total >= 3) { setAviso({ tipo: 'error', texto: 'Máximo 3 fotos por clase y día.' }); return; }
+    setSubiendoEvid(true);
+    try {
+      const pos = await obtenerUbicacionWeb();
+      const fd = new FormData();
+      fd.append('foto', blob, 'evidencia.jpg');
+      fd.append('materiaId', clase.id);
+      fd.append('fecha', fechaHoy());
+      fd.append('clienteId', nuevoClienteId());
+      fd.append('capturadoEn', new Date().toISOString());
+      if (pos) {
+        fd.append('latitud', pos.latitude);
+        fd.append('longitud', pos.longitude);
+        fd.append('precision', pos.accuracy);
+      }
+      await api('/asistencia/evidencia', { method: 'POST', body: fd });
+      setAviso({ tipo: 'ok', texto: 'Evidencia subida.' });
+      await cargarEvidencias();
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: e.message });
+    } finally {
+      setSubiendoEvid(false);
+    }
+  };
+
+  // ✅ FIX: la validación de evidencia ahora está DENTRO de finalizar()
   const finalizar = async () => {
     if (!clase) return;
+    if (requiere && evidencias.total === 0) {
+      return setAviso({
+        tipo: 'error',
+        texto: 'Tu institución requiere una foto de evidencia antes de finalizar. Tómala con "Tomar foto".',
+      });
+    }
     if (!window.confirm(`¿Finalizar "${clase.nombre}"?\nSe notificará a los padres de presentes y ausentes.`)) return;
     setOcupado(true);
     try {
@@ -85,6 +158,7 @@ export default function Asistencia() {
         tipo: 'ok',
         texto: r.yaFinalizada ? r.mensaje : `Clase finalizada. Presentes: ${r.presentes} · Ausentes: ${r.ausentes}`,
       });
+      await cargarEvidencias();
     } catch (e) {
       setAviso({ tipo: 'error', texto: e.message });
     } finally { setOcupado(false); }
@@ -124,6 +198,40 @@ export default function Asistencia() {
         {camara && clase && <QrScanner onCode={registrar} />}
       </div>
 
+      {/* ✅ FIX: tarjeta de evidencia FUERA de la tabla, justo debajo del formulario */}
+      {requiere && (
+        <div className="card">
+          <div className="secth">
+            <h3>Evidencia de la clase {evidencias.total > 0 ? `(${evidencias.total}/3)` : ''}</h3>
+            <Btn
+              icon={IoCameraOutline}
+              variant={evidencias.total ? 'sec' : 'warn'}
+              disabled={!clase || subiendoEvid || evidencias.total >= 3}
+              onClick={() => setCamaraEvid(true)}
+            >
+              {subiendoEvid ? 'Subiendo…' : 'Tomar foto'}
+            </Btn>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            {!clase ? 'Selecciona una clase.'
+              : evidencias.total ? 'Evidencia registrada.'
+              : 'Obligatoria para finalizar la clase. Solo se permite una foto tomada en el momento con la cámara.'}
+          </p>
+          {evidencias.fotos?.length > 0 && (
+            <div className="evid-grid">
+              {evidencias.fotos.map((f) => (
+                <a key={f.id} href={f.url} target="_blank" rel="noreferrer">
+                  <img src={f.url} alt="Evidencia" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {camaraEvid && clase && (
+        <CamaraEvidencia onFoto={subirFoto} onCerrar={() => setCamaraEvid(false)} />
+      )}
+
       <div className="card">
         <div className="fila between">
           <h3>Registros de hoy: {visibles.length}</h3>
@@ -131,9 +239,13 @@ export default function Asistencia() {
         </div>
         <div className="scroll">
           <table>
-            <thead><tr><th>Hora</th><th>Estudiante</th><th>Materia</th><th>Grado</th><th></th></tr></thead>
+            <thead>
+              <tr><th>Hora</th><th>Estudiante</th><th>Materia</th><th>Grado</th><th></th></tr>
+            </thead>
             <tbody>
-              {visibles.length === 0 && <tr><td colSpan="5" className="muted">Sin registros todavía.</td></tr>}
+              {visibles.length === 0 && (
+                <tr><td colSpan="5" className="muted">Sin registros todavía.</td></tr>
+              )}
               {visibles.map((i) => (
                 <tr key={i.id}>
                   <td>{i.hora?.slice(0, 5)}</td>
@@ -144,8 +256,13 @@ export default function Asistencia() {
                   <td>{i.materia_nombre}</td>
                   <td>{i.estudiante?.grado}° {i.estudiante?.seccion}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <Btn icon={IoTrashOutline} variant="danger sm" onClick={() => eliminar(i)}
-                      disabled={eliminandoId === i.id} title="Quitar de la asistencia de hoy">
+                    <Btn
+                      icon={IoTrashOutline}
+                      variant="danger sm"
+                      onClick={() => eliminar(i)}
+                      disabled={eliminandoId === i.id}
+                      title="Quitar de la asistencia de hoy"
+                    >
                       {eliminandoId === i.id ? 'Quitando…' : 'Quitar'}
                     </Btn>
                   </td>
