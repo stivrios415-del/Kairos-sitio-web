@@ -108,6 +108,7 @@ td{padding:10px 8px;border-bottom:1px solid #F3F4F6}
 .resumen{display:flex;align-items:center;gap:14px}
 .resumen .ico{width:48px;height:48px;border-radius:50%;background:var(--success-soft);color:var(--success);display:flex;align-items:center;justify-content:center}
 .resumen b{font-size:26px;display:block;line-height:1;color:var(--text)}
+
 /* ── Bienvenida (mismo diseño que la app) ── */
 .welcome{min-height:100vh;background:#acddf1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 20px}
 .w-logo{text-align:center;margin-bottom:24px}
@@ -146,6 +147,7 @@ td{padding:10px 8px;border-bottom:1px solid #F3F4F6}
 .inp:focus-within{border-color:var(--p)}
 .inp input,.inp input:focus{border:0;outline:none;background:none;flex:1;min-width:0;padding:11px 0}
 .login a{color:var(--p);font-weight:600}
+
 /* ── Código de institución (mismo diseño que la app) ── */
 .codigo-page{min-height:100vh;background:#65cea4;display:flex;align-items:center;justify-content:center;padding:24px;position:relative}
 .cod-back{position:absolute;top:20px;left:20px;width:44px;height:44px;border-radius:50%;background:#fff;color:#1A237E;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(26,35,126,.2);text-decoration:none}
@@ -164,3 +166,108 @@ td{padding:10px 8px;border-bottom:1px solid #F3F4F6}
 .foto-edit{display:flex;gap:14px;align-items:center}
 .foto-edit .avatar{width:84px;height:84px;font-size:22px}
 .foto-edit .btns{display:flex;flex-direction:column;gap:8px}
+
+/* ✅ NUEVOS ESTILOS PARA EL PANEL DE INICIO (FIX) */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.kpi-ico {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.kpi > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.kpi small {
+  color: var(--sec);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.kpi b {
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+.kpi em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+.vivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sec);
+  font-weight: 500;
+  background: var(--surface);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.vivo i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}
+.donut-c {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.donut-c b { font-size: 28px; color: var(--p); line-height: 1; }
+.donut-c span { font-size: 12px; color: var(--sec); }
+.fila-lista {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #F3F4F6;
+  font-size: 14px;
+}
+.fila-lista:last-child { border-bottom: none; }
+.barra {
+  width: 100%;
+  height: 8px;
+  background: #E2E8F0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.barra span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
