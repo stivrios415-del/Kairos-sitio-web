@@ -4,10 +4,12 @@ import { FiUsers, FiBookOpen, FiCopy, FiUser, FiFileText, FiBarChart2, FiShield 
 import { useAuth } from '../context/AuthContext';
 
 const PROFESOR = [
-  { to: '/', label: 'Tomar asistencia', icon: IoSchoolOutline, end: true },
+  { to: '/', label: 'Inicio', icon: IoHomeOutline, end: true },
+  { to: '/asistencia', label: 'Tomar asistencia', icon: IoSchoolOutline },
   { to: '/reportes', label: 'Reportes', icon: IoBarChartOutline },
   { to: '/estadisticas', label: 'Estadísticas', icon: IoAnalyticsOutline },
 ];
+
 const INDEP = [{ to: '/', label: 'Mi panel', icon: IoSchoolOutline, end: true }];
 const ADMIN = [
   { to: '/admin/profesores', label: 'Profesores', icon: FiUsers },
