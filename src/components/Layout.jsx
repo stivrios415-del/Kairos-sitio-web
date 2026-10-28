@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { IoSchoolOutline, IoBarChartOutline, IoAnalyticsOutline, IoLogOutOutline } from 'react-icons/io5';
+// ✅ FIX: Se agregó IoHomeOutline aquí
+import { IoHomeOutline, IoSchoolOutline, IoBarChartOutline, IoAnalyticsOutline, IoLogOutOutline } from 'react-icons/io5';
 import { FiUsers, FiBookOpen, FiCopy, FiUser, FiFileText, FiBarChart2, FiShield } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
