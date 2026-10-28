@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   IoCheckmarkCircleOutline, IoCameraOutline, IoCheckmarkDoneOutline,
-  IoTrashOutline, IoRefreshOutline, IoSearchOutline, IoCloseOutline, IoCreateOutline
+  IoTrashOutline, IoRefreshOutline, IoCloseOutline, IoCheckmark
 } from 'react-icons/io5';
 import { supabase } from '../lib/supabase';
 import { api, fechaHoy } from '../lib/api';
@@ -21,11 +21,8 @@ export default function Asistencia() {
   const [eliminandoId, setEliminandoId] = useState(null);
   const inputRef = useRef(null);
 
-  // ✅ NUEVOS ESTADOS PARA EL MODAL MANUAL
-  const [modalManual, setModalManual] = useState(false);
-  const [cedulaManual, setCedulaManual] = useState('');
-  const [estudianteManual, setEstudianteManual] = useState(null);
-  const [buscandoManual, setBuscandoManual] = useState(false);
+  // ✅ NUEVO ESTADO: Guarda al alumno para mostrar la ventanita
+  const [alumnoRegistrado, setAlumnoRegistrado] = useState(null);
 
   const cargarLista = useCallback(async () => {
     try { setLista(await api('/asistencia/hoy', { params: { profesorEmail: perfil.email } })); }
@@ -45,56 +42,28 @@ export default function Asistencia() {
     return lista.filter((i) => (i.materia_id ? i.materia_id === clase.id : i.materia_nombre === clase.nombre));
   }, [lista, clase]);
 
-  // Función para registrar (usada por el escáner y el manual)
   const registrar = useCallback(async (valor) => {
     const c = String(valor).trim();
     if (!clase) return setAviso({ tipo: 'error', texto: 'Primero selecciona una clase.' });
     if (c.length !== 13) return setAviso({ tipo: 'error', texto: 'La cédula debe tener 13 dígitos.' });
+    
     setOcupado(true);
     try {
       const r = await api('/asistencia', { method: 'POST', body: { cedula: c, materiaId: clase.id } });
+      
+      // ✅ AQUÍ ACTIVAMOS LA VENTANITA
+      setAlumnoRegistrado(r.estudiante); 
+      
       setAviso({ tipo: 'ok', texto: `✓ ${r.estudiante.nombre} ${r.estudiante.apellido} — ${r.hora}` });
       setCedula('');
       await cargarLista();
-      return true; // Retornamos true para saber que fue exitoso
     } catch (e) {
       setAviso({ tipo: 'error', texto: e.message });
-      return false;
     } finally {
       setOcupado(false);
       inputRef.current?.focus();
     }
   }, [clase, cargarLista]);
-
-  // ✅ NUEVA FUNCIÓN: Buscar estudiante para el modal
-  const buscarEstudianteManual = async (e) => {
-    e.preventDefault();
-    if (!cedulaManual || cedulaManual.length !== 13) {
-      return setAviso({ tipo: 'error', texto: 'Ingresa una cédula de 13 dígitos' });
-    }
-    setBuscandoManual(true);
-    setEstudianteManual(null);
-    try {
-      // Asumimos que tienes este endpoint para buscar por cédula
-      const data = await api(`/estudiantes/buscar/${cedulaManual}`);
-      setEstudianteManual(data);
-    } catch (err) {
-      setAviso({ tipo: 'error', texto: 'Estudiante no encontrado' });
-    } finally {
-      setBuscandoManual(false);
-    }
-  };
-
-  // ✅ NUEVA FUNCIÓN: Registrar desde el modal
-  const confirmarRegistroManual = async () => {
-    if (!estudianteManual) return;
-    const exito = await registrar(estudianteManual.cedula);
-    if (exito) {
-      setModalManual(false);
-      setCedulaManual('');
-      setEstudianteManual(null);
-    }
-  };
 
   const eliminar = async (item) => {
     const nombre = `${item.estudiante?.nombre || ''} ${item.estudiante?.apellido || ''}`.trim();
@@ -145,24 +114,20 @@ export default function Asistencia() {
       </div>
 
       <div className="card">
-        <div className="fila" style={{ marginBottom: 15 }}>
-          <Btn 
-            type="button" 
-            variant="sec" 
-            icon={IoCreateOutline} 
-            onClick={() => setModalManual(true)} 
-            disabled={!clase}
-            style={{ flex: 1 }}
-          >
-            Registro manual
-          </Btn>
-          <Btn type="button" icon={IoCameraOutline} variant="sec" onClick={() => setCamara((v) => !v)} disabled={!clase} style={{ flex: 1 }}>
+        <form className="fila" onSubmit={(e) => { e.preventDefault(); registrar(cedula); }}>
+          <input
+            ref={inputRef} autoFocus inputMode="numeric" maxLength={13}
+            placeholder="Cédula (13 dígitos) — o usa un lector de código"
+            value={cedula} onChange={(e) => setCedula(e.target.value)} disabled={!clase || ocupado}
+          />
+          <Btn icon={IoCheckmarkCircleOutline} disabled={!clase || ocupado}>Registrar</Btn>
+          <Btn type="button" icon={IoCameraOutline} variant="sec" onClick={() => setCamara((v) => !v)} disabled={!clase}>
             {camara ? 'Cerrar cámara' : 'Escanear QR'}
           </Btn>
-          <Btn type="button" icon={IoCheckmarkDoneOutline} variant="ok" onClick={finalizar} disabled={!clase || ocupado} style={{ flex: 1 }}>
+          <Btn type="button" icon={IoCheckmarkDoneOutline} variant="ok" onClick={finalizar} disabled={!clase || ocupado}>
             Finalizar clase
           </Btn>
-        </div>
+        </form>
         <Aviso aviso={aviso} />
         {camara && clase && <QrScanner onCode={registrar} />}
       </div>
@@ -199,57 +164,31 @@ export default function Asistencia() {
         </div>
       </div>
 
-      {/* ✅ NUEVO MODAL DE REGISTRO MANUAL (IDÉNTICO A LA APP) */}
-      {modalManual && (
-        <div className="manual-overlay" onClick={() => setModalManual(false)}>
-          <div className="manual-modal" onClick={(e) => e.stopPropagation()}>
+      {/* ✅ VENTANITA QUE APARECE AL REGISTRAR AL ALUMNO */}
+      {alumnoRegistrado && (
+        <div className="modal-alumno-overlay" onClick={() => setAlumnoRegistrado(null)}>
+          <div className="modal-alumno-card" onClick={(e) => e.stopPropagation()}>
             
-            <div className="manual-header">
-              <div className="manual-title">
-                <span className="manual-ico"><IoCreateOutline size={20} /></span>
-                <h3>Registro manual</h3>
-              </div>
-              <button className="manual-close" onClick={() => setModalManual(false)}><IoCloseOutline size={24} /></button>
+            <button className="modal-alumno-close" onClick={() => setAlumnoRegistrado(null)}>
+              <IoCloseOutline size={24} />
+            </button>
+
+            <div className="modal-alumno-foto">
+              {alumnoRegistrado.foto_url ? (
+                <img src={alumnoRegistrado.foto_url} alt="Estudiante" />
+              ) : (
+                <span>{alumnoRegistrado.nombre[0]}{alumnoRegistrado.apellido[0]}</span>
+              )}
             </div>
-
-            <form className="manual-search" onSubmit={buscarEstudianteManual}>
-              <input 
-                type="text" 
-                placeholder="0101200900594" 
-                value={cedulaManual} 
-                onChange={(e) => setCedulaManual(e.target.value.replace(/\D/g, ''))} 
-                maxLength={13}
-              />
-              <button type="submit" className="manual-search-btn" disabled={buscandoManual}>
-                {buscandoManual ? '...' : <IoSearchOutline size={20} />}
-              </button>
-            </form>
-
-            {estudianteManual && (
-              <div className="manual-card">
-                <div className="manual-avatar">
-                  {estudianteManual.foto_url ? (
-                    <img src={estudianteManual.foto_url} alt="Estudiante" />
-                  ) : (
-                    <span>{estudianteManual.nombre[0]}{estudianteManual.apellido[0]}</span>
-                  )}
-                </div>
-                <h4>{estudianteManual.nombre} {estudianteManual.apellido}</h4>
-                <p className="manual-carrera">{estudianteManual.carrera || 'Sin carrera'}</p>
-                <p className="manual-grado">Grado: {estudianteManual.grado}° - Sección: {estudianteManual.seccion}</p>
-                
-                {/* Validación visual por si no pertenece a la clase */}
-                {estudianteManual.grado !== clase?.grado || estudianteManual.carrera !== clase?.carrera ? (
-                  <p className="manual-error">⚠️ Este estudiante no pertenece a esta clase.</p>
-                ) : (
-                  <button className="manual-btn-ok" onClick={confirmarRegistroManual} disabled={ocupado}>
-                    <IoCheckmarkCircleOutline size={20} />
-                    {ocupado ? 'Registrando...' : 'Registrar asistencia'}
-                  </button>
-                )}
-              </div>
-            )}
             
+            <h3 className="modal-alumno-nombre">{alumnoRegistrado.nombre} {alumnoRegistrado.apellido}</h3>
+            <p className="modal-alumno-carrera">{alumnoRegistrado.carrera || 'Sin carrera'}</p>
+            <p className="modal-alumno-grado">Grado: {alumnoRegistrado.grado}° - Sección: {alumnoRegistrado.seccion}</p>
+            
+            <button className="modal-alumno-btn" onClick={() => setAlumnoRegistrado(null)}>
+              <IoCheckmark size={22} />
+              Aceptar
+            </button>
           </div>
         </div>
       )}
