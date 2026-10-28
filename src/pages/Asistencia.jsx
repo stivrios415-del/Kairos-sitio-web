@@ -1,25 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   IoCheckmarkCircleOutline, IoCameraOutline, IoCheckmarkDoneOutline,
-  IoTrashOutline, IoRefreshOutline,
+  IoTrashOutline, IoRefreshOutline, IoSearchOutline, IoCloseOutline, IoCreateOutline
 } from 'react-icons/io5';
 import { supabase } from '../lib/supabase';
-import { api, fechaHoy } from '../lib/api'; // ✅ FIX: import duplicado eliminado
+import { api, fechaHoy } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import QrScanner from '../components/QrScanner';
 import { Btn, Aviso } from '../components/ui';
-import CamaraEvidencia, { obtenerUbicacionWeb } from '../components/CamaraEvidencia';
-
-// ✅ FIX: crypto.randomUUID no existe en navegadores viejos / contextos no seguros
-const nuevoClienteId = () =>
-  (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : `c_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 export default function Asistencia() {
   const { perfil } = useAuth();
-
-  // ── Clases y lista del día ──
   const [clases, setClases] = useState([]);
   const [clase, setClase] = useState(null);
   const [lista, setLista] = useState([]);
@@ -30,36 +21,16 @@ export default function Asistencia() {
   const [eliminandoId, setEliminandoId] = useState(null);
   const inputRef = useRef(null);
 
-  // ✅ FIX: todos los estados de evidencia ahora viven DENTRO del componente
-  const [requiere, setRequiere] = useState(!!perfil?.instituciones?.requiere_evidencia);
-  const [evidencias, setEvidencias] = useState({ total: 0, fotos: [] });
-  const [camaraEvid, setCamaraEvid] = useState(false);
-  const [subiendoEvid, setSubiendoEvid] = useState(false);
-
-  // ✅ FIX: `inst` no existía. La fuente de verdad es /instituciones/mia
-  // (ese endpoint ya devuelve requiere_evidencia).
-  useEffect(() => {
-    let vivo = true;
-    api('/instituciones/mia')
-      .then((d) => { if (vivo) setRequiere(!!d?.requiere_evidencia); })
-      .catch(() => { /* si falla, se queda el valor del perfil */ });
-    return () => { vivo = false; };
-  }, []);
+  // ✅ NUEVOS ESTADOS PARA EL MODAL MANUAL
+  const [modalManual, setModalManual] = useState(false);
+  const [cedulaManual, setCedulaManual] = useState('');
+  const [estudianteManual, setEstudianteManual] = useState(null);
+  const [buscandoManual, setBuscandoManual] = useState(false);
 
   const cargarLista = useCallback(async () => {
     try { setLista(await api('/asistencia/hoy', { params: { profesorEmail: perfil.email } })); }
     catch (e) { setAviso({ tipo: 'error', texto: e.message }); }
   }, [perfil.email]);
-
-  // ✅ FIX: cargarEvidencias movido dentro del componente
-  const cargarEvidencias = useCallback(async () => {
-    if (!requiere || !clase) { setEvidencias({ total: 0, fotos: [] }); return; }
-    try {
-      setEvidencias(await api(`/asistencia/evidencia/${clase.id}`, { params: { fecha: fechaHoy() } }));
-    } catch {
-      setEvidencias({ total: 0, fotos: [] });
-    }
-  }, [requiere, clase]);
 
   useEffect(() => {
     supabase.from('materias').select('*').eq('profesor_id', perfil.id)
@@ -69,13 +40,12 @@ export default function Asistencia() {
     return () => clearInterval(t);
   }, [perfil.id, cargarLista]);
 
-  useEffect(() => { cargarEvidencias(); }, [cargarEvidencias]);
-
   const visibles = useMemo(() => {
     if (!clase) return lista;
     return lista.filter((i) => (i.materia_id ? i.materia_id === clase.id : i.materia_nombre === clase.nombre));
   }, [lista, clase]);
 
+  // Función para registrar (usada por el escáner y el manual)
   const registrar = useCallback(async (valor) => {
     const c = String(valor).trim();
     if (!clase) return setAviso({ tipo: 'error', texto: 'Primero selecciona una clase.' });
@@ -86,13 +56,45 @@ export default function Asistencia() {
       setAviso({ tipo: 'ok', texto: `✓ ${r.estudiante.nombre} ${r.estudiante.apellido} — ${r.hora}` });
       setCedula('');
       await cargarLista();
+      return true; // Retornamos true para saber que fue exitoso
     } catch (e) {
       setAviso({ tipo: 'error', texto: e.message });
+      return false;
     } finally {
       setOcupado(false);
       inputRef.current?.focus();
     }
   }, [clase, cargarLista]);
+
+  // ✅ NUEVA FUNCIÓN: Buscar estudiante para el modal
+  const buscarEstudianteManual = async (e) => {
+    e.preventDefault();
+    if (!cedulaManual || cedulaManual.length !== 13) {
+      return setAviso({ tipo: 'error', texto: 'Ingresa una cédula de 13 dígitos' });
+    }
+    setBuscandoManual(true);
+    setEstudianteManual(null);
+    try {
+      // Asumimos que tienes este endpoint para buscar por cédula
+      const data = await api(`/estudiantes/buscar/${cedulaManual}`);
+      setEstudianteManual(data);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: 'Estudiante no encontrado' });
+    } finally {
+      setBuscandoManual(false);
+    }
+  };
+
+  // ✅ NUEVA FUNCIÓN: Registrar desde el modal
+  const confirmarRegistroManual = async () => {
+    if (!estudianteManual) return;
+    const exito = await registrar(estudianteManual.cedula);
+    if (exito) {
+      setModalManual(false);
+      setCedulaManual('');
+      setEstudianteManual(null);
+    }
+  };
 
   const eliminar = async (item) => {
     const nombre = `${item.estudiante?.nombre || ''} ${item.estudiante?.apellido || ''}`.trim();
@@ -109,44 +111,8 @@ export default function Asistencia() {
     }
   };
 
-  // ✅ FIX: subirFoto movido dentro del componente + validaciones extra
-  const subirFoto = async (blob) => {
-    setCamaraEvid(false);
-    if (!clase) { setAviso({ tipo: 'error', texto: 'Selecciona una clase primero.' }); return; }
-    if (evidencias.total >= 3) { setAviso({ tipo: 'error', texto: 'Máximo 3 fotos por clase y día.' }); return; }
-    setSubiendoEvid(true);
-    try {
-      const pos = await obtenerUbicacionWeb();
-      const fd = new FormData();
-      fd.append('foto', blob, 'evidencia.jpg');
-      fd.append('materiaId', clase.id);
-      fd.append('fecha', fechaHoy());
-      fd.append('clienteId', nuevoClienteId());
-      fd.append('capturadoEn', new Date().toISOString());
-      if (pos) {
-        fd.append('latitud', pos.latitude);
-        fd.append('longitud', pos.longitude);
-        fd.append('precision', pos.accuracy);
-      }
-      await api('/asistencia/evidencia', { method: 'POST', body: fd });
-      setAviso({ tipo: 'ok', texto: 'Evidencia subida.' });
-      await cargarEvidencias();
-    } catch (e) {
-      setAviso({ tipo: 'error', texto: e.message });
-    } finally {
-      setSubiendoEvid(false);
-    }
-  };
-
-  // ✅ FIX: la validación de evidencia ahora está DENTRO de finalizar()
   const finalizar = async () => {
     if (!clase) return;
-    if (requiere && evidencias.total === 0) {
-      return setAviso({
-        tipo: 'error',
-        texto: 'Tu institución requiere una foto de evidencia antes de finalizar. Tómala con "Tomar foto".',
-      });
-    }
     if (!window.confirm(`¿Finalizar "${clase.nombre}"?\nSe notificará a los padres de presentes y ausentes.`)) return;
     setOcupado(true);
     try {
@@ -158,7 +124,6 @@ export default function Asistencia() {
         tipo: 'ok',
         texto: r.yaFinalizada ? r.mensaje : `Clase finalizada. Presentes: ${r.presentes} · Ausentes: ${r.ausentes}`,
       });
-      await cargarEvidencias();
     } catch (e) {
       setAviso({ tipo: 'error', texto: e.message });
     } finally { setOcupado(false); }
@@ -180,57 +145,27 @@ export default function Asistencia() {
       </div>
 
       <div className="card">
-        <form className="fila" onSubmit={(e) => { e.preventDefault(); registrar(cedula); }}>
-          <input
-            ref={inputRef} autoFocus inputMode="numeric" maxLength={13}
-            placeholder="Cédula (13 dígitos) — o usa un lector de código"
-            value={cedula} onChange={(e) => setCedula(e.target.value)} disabled={!clase || ocupado}
-          />
-          <Btn icon={IoCheckmarkCircleOutline} disabled={!clase || ocupado}>Registrar</Btn>
-          <Btn type="button" icon={IoCameraOutline} variant="sec" onClick={() => setCamara((v) => !v)} disabled={!clase}>
+        <div className="fila" style={{ marginBottom: 15 }}>
+          <Btn 
+            type="button" 
+            variant="sec" 
+            icon={IoCreateOutline} 
+            onClick={() => setModalManual(true)} 
+            disabled={!clase}
+            style={{ flex: 1 }}
+          >
+            Registro manual
+          </Btn>
+          <Btn type="button" icon={IoCameraOutline} variant="sec" onClick={() => setCamara((v) => !v)} disabled={!clase} style={{ flex: 1 }}>
             {camara ? 'Cerrar cámara' : 'Escanear QR'}
           </Btn>
-          <Btn type="button" icon={IoCheckmarkDoneOutline} variant="ok" onClick={finalizar} disabled={!clase || ocupado}>
+          <Btn type="button" icon={IoCheckmarkDoneOutline} variant="ok" onClick={finalizar} disabled={!clase || ocupado} style={{ flex: 1 }}>
             Finalizar clase
           </Btn>
-        </form>
+        </div>
         <Aviso aviso={aviso} />
         {camara && clase && <QrScanner onCode={registrar} />}
       </div>
-
-      {/* ✅ FIX: tarjeta de evidencia FUERA de la tabla, justo debajo del formulario */}
-      {requiere && (
-        <div className="card">
-          <div className="secth">
-            <h3>Evidencia de la clase {evidencias.total > 0 ? `(${evidencias.total}/3)` : ''}</h3>
-            <Btn
-              icon={IoCameraOutline}
-              variant={evidencias.total ? 'sec' : 'warn'}
-              disabled={!clase || subiendoEvid || evidencias.total >= 3}
-              onClick={() => setCamaraEvid(true)}
-            >
-              {subiendoEvid ? 'Subiendo…' : 'Tomar foto'}
-            </Btn>
-          </div>
-          <p className="muted" style={{ margin: 0 }}>
-            {!clase ? 'Selecciona una clase.'
-              : evidencias.total ? 'Evidencia registrada.'
-              : 'Obligatoria para finalizar la clase. Solo se permite una foto tomada en el momento con la cámara.'}
-          </p>
-          {evidencias.fotos?.length > 0 && (
-            <div className="evid-grid">
-              {evidencias.fotos.map((f) => (
-                <a key={f.id} href={f.url} target="_blank" rel="noreferrer">
-                  <img src={f.url} alt="Evidencia" />
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {camaraEvid && clase && (
-        <CamaraEvidencia onFoto={subirFoto} onCerrar={() => setCamaraEvid(false)} />
-      )}
 
       <div className="card">
         <div className="fila between">
@@ -239,13 +174,9 @@ export default function Asistencia() {
         </div>
         <div className="scroll">
           <table>
-            <thead>
-              <tr><th>Hora</th><th>Estudiante</th><th>Materia</th><th>Grado</th><th></th></tr>
-            </thead>
+            <thead><tr><th>Hora</th><th>Estudiante</th><th>Materia</th><th>Grado</th><th></th></tr></thead>
             <tbody>
-              {visibles.length === 0 && (
-                <tr><td colSpan="5" className="muted">Sin registros todavía.</td></tr>
-              )}
+              {visibles.length === 0 && <tr><td colSpan="5" className="muted">Sin registros todavía.</td></tr>}
               {visibles.map((i) => (
                 <tr key={i.id}>
                   <td>{i.hora?.slice(0, 5)}</td>
@@ -256,13 +187,8 @@ export default function Asistencia() {
                   <td>{i.materia_nombre}</td>
                   <td>{i.estudiante?.grado}° {i.estudiante?.seccion}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <Btn
-                      icon={IoTrashOutline}
-                      variant="danger sm"
-                      onClick={() => eliminar(i)}
-                      disabled={eliminandoId === i.id}
-                      title="Quitar de la asistencia de hoy"
-                    >
+                    <Btn icon={IoTrashOutline} variant="danger sm" onClick={() => eliminar(i)}
+                      disabled={eliminandoId === i.id} title="Quitar de la asistencia de hoy">
                       {eliminandoId === i.id ? 'Quitando…' : 'Quitar'}
                     </Btn>
                   </td>
@@ -272,6 +198,61 @@ export default function Asistencia() {
           </table>
         </div>
       </div>
+
+      {/* ✅ NUEVO MODAL DE REGISTRO MANUAL (IDÉNTICO A LA APP) */}
+      {modalManual && (
+        <div className="manual-overlay" onClick={() => setModalManual(false)}>
+          <div className="manual-modal" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="manual-header">
+              <div className="manual-title">
+                <span className="manual-ico"><IoCreateOutline size={20} /></span>
+                <h3>Registro manual</h3>
+              </div>
+              <button className="manual-close" onClick={() => setModalManual(false)}><IoCloseOutline size={24} /></button>
+            </div>
+
+            <form className="manual-search" onSubmit={buscarEstudianteManual}>
+              <input 
+                type="text" 
+                placeholder="0101200900594" 
+                value={cedulaManual} 
+                onChange={(e) => setCedulaManual(e.target.value.replace(/\D/g, ''))} 
+                maxLength={13}
+              />
+              <button type="submit" className="manual-search-btn" disabled={buscandoManual}>
+                {buscandoManual ? '...' : <IoSearchOutline size={20} />}
+              </button>
+            </form>
+
+            {estudianteManual && (
+              <div className="manual-card">
+                <div className="manual-avatar">
+                  {estudianteManual.foto_url ? (
+                    <img src={estudianteManual.foto_url} alt="Estudiante" />
+                  ) : (
+                    <span>{estudianteManual.nombre[0]}{estudianteManual.apellido[0]}</span>
+                  )}
+                </div>
+                <h4>{estudianteManual.nombre} {estudianteManual.apellido}</h4>
+                <p className="manual-carrera">{estudianteManual.carrera || 'Sin carrera'}</p>
+                <p className="manual-grado">Grado: {estudianteManual.grado}° - Sección: {estudianteManual.seccion}</p>
+                
+                {/* Validación visual por si no pertenece a la clase */}
+                {estudianteManual.grado !== clase?.grado || estudianteManual.carrera !== clase?.carrera ? (
+                  <p className="manual-error">⚠️ Este estudiante no pertenece a esta clase.</p>
+                ) : (
+                  <button className="manual-btn-ok" onClick={confirmarRegistroManual} disabled={ocupado}>
+                    <IoCheckmarkCircleOutline size={20} />
+                    {ocupado ? 'Registrando...' : 'Registrar asistencia'}
+                  </button>
+                )}
+              </div>
+            )}
+            
+          </div>
+        </div>
+      )}
     </>
   );
 }
