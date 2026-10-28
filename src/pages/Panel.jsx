@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   IoPeopleOutline, IoCheckmarkCircleOutline, IoCloseCircleOutline, IoSchoolOutline,
-  IoRefreshOutline, IoClipboardOutline,
+  IoRefreshOutline, IoClipboardOutline, IoTimeOutline // ✅ Agregado para evitar el error
 } from 'react-icons/io5';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
