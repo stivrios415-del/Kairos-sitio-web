@@ -3,6 +3,8 @@ import { FiPlus, FiEdit2, FiTrash2, FiUser, FiSearch } from 'react-icons/fi';
 import { api } from '../../lib/api';
 import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
 import FotoEstudiante from '../../components/FotoEstudiante';
+// ✅ NUEVO: Importación de useAuth
+import { useAuth } from '../../context/AuthContext';
 
 const VACIO = { cedula: '', nombre: '', apellido: '', grado: '', seccion: '', carrera: '', foto_url: '' };
 const LIMITE = 100;
@@ -10,6 +12,11 @@ const iniciales = (e) => `${(e.nombre || '')[0] || ''}${(e.apellido || '')[0] ||
 const conActual = (lista, valor) => (valor && !lista.includes(valor) ? [...lista, valor] : lista);
 
 export default function Estudiantes() {
+  // ✅ NUEVO: Obtenemos la institución y definimos los grados rurales
+  const { inst } = useAuth();
+  const rural = !!inst?.es_rural;
+  const GRADOS_RURAL = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState('');
@@ -51,17 +58,17 @@ export default function Estudiantes() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  // ✅ MODIFICADO: Pone 'Rural' por defecto al abrir el formulario vacío
   const abrir = (e = null) => {
     setEditando(e);
     setForm(e ? {
       cedula: e.cedula, nombre: e.nombre || '', apellido: e.apellido || '', grado: String(e.grado ?? ''),
       seccion: e.seccion || '', carrera: e.carrera || '', foto_url: e.foto_url || '',
-    } : VACIO);
-    setFotoPendiente(null); // ✅ Limpiar la foto pendiente al abrir el modal
+    } : { ...VACIO, carrera: rural ? 'Rural' : '' });
+    setFotoPendiente(null);
     setModal(true);
   };
 
-  // ✅ REEMPLAZADO: Lógica para guardar y subir la foto
   const guardar = async (ev) => {
     ev.preventDefault();
     if (!editando && !/^\d{13}$/.test(form.cedula)) {
@@ -72,8 +79,11 @@ export default function Estudiantes() {
     }
     setGuardando(true);
     try {
+      // ✅ MODIFICADO: Fuerza el valor 'Rural' al guardar si es un colegio rural
+      const datos = rural ? { ...form, carrera: 'Rural' } : form;
+
       await api(editando ? `/estudiantes/${editando.cedula}` : '/estudiantes', {
-        method: editando ? 'PUT' : 'POST', body: form,
+        method: editando ? 'PUT' : 'POST', body: datos,
       });
 
       let falloFoto = '';
@@ -127,6 +137,7 @@ export default function Estudiantes() {
               {grados.map((g) => <option key={g} value={g}>{g}°</option>)}
             </select>
           </label>
+          {/* En los filtros se mantiene la carrera normal (si aplica) */}
           <label>Carrera
             <select value={fCarrera} onChange={(e) => setFCarrera(e.target.value)}>
               <option value="">Todas</option>
@@ -188,19 +199,23 @@ export default function Estudiantes() {
               <label>Grado *
                 <select value={form.grado} onChange={set('grado')} required>
                   <option value="">Selecciona…</option>
-                  {conActual(grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
+                  {/* ✅ MODIFICADO: Usa GRADOS_RURAL si es rural */}
+                  {conActual(rural ? GRADOS_RURAL : grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
                 </select>
               </label>
               <label>Sección *<input value={form.seccion} onChange={set('seccion')} placeholder="Ej: A, 1" required /></label>
             </div>
-            <label>Carrera *
-              <select value={form.carrera} onChange={set('carrera')} required>
-                <option value="">Selecciona…</option>
-                {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
+            
+            {/* ✅ MODIFICADO: Oculta la carrera si es rural */}
+            {!rural && (
+              <label>Carrera *
+                <select value={form.carrera} onChange={set('carrera')} required>
+                  <option value="">Selecciona…</option>
+                  {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            )}
 
-            {/* ✅ REEMPLAZADO: Componente visual de foto */}
             <FotoEstudiante
               iniciales={iniciales(form)}
               urlActual={form.foto_url}
