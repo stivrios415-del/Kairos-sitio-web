@@ -45,8 +45,9 @@ export function AuthProvider({ children }) {
     const headers = { Authorization: `Bearer ${s.access_token}` };
 
     // 1) Profesor / admin de un colegio
+    // ✅ FIX: Se usa .maybeSingle() para evitar el error 406
     const { data: p } = await supabase
-      .from('profesores').select('id,nombre,email,rol,institucion_id,activo').eq('id', uid).single();
+      .from('profesores').select('id,nombre,email,rol,institucion_id,activo').eq('id', uid).maybeSingle();
     if (!vigente()) return;
 
     if (p) {
@@ -87,8 +88,12 @@ export function AuthProvider({ children }) {
         setPerfil({ id: uid, nombre: data.nombre || s.user.email, email: s.user.email, rol: 'coordinador', red: data.red });
         setLoading(false);
         return;
+      } else {
+        console.warn(`Fallo al cargar red: ${r.status} ${r.statusText}`);
       }
-    } catch { /* se intenta como independiente */ }
+    } catch (err) { 
+      console.warn('Error de red al buscar coordinador:', err.message);
+    }
 
     // 3) Profesor independiente
     try {
@@ -111,7 +116,6 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (session?.user?.id) cargarPerfil(session);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, cargarPerfil]);
 
   const recargar = async () => {
