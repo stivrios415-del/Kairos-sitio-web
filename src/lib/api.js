@@ -41,6 +41,9 @@ export async function api(path, { method = 'GET', body, params, timeoutMs = 9000
     throw new Error('Falta VITE_API_URL en el .env (debe terminar en /api). Reinicia npm run dev después de crearlo.');
   }
 
+  // ✅ NUEVO: Leemos el colegio elegido por el coordinador
+  const colegio = sessionStorage.getItem('kairos_colegio');
+
   const qs = params
     ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''))
     : '';
@@ -59,6 +62,7 @@ export async function api(path, { method = 'GET', body, params, timeoutMs = 9000
         headers: {
           ...(esForm ? {} : { 'Content-Type': 'application/json' }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(colegio ? { 'X-Institucion-Id': colegio } : {}), // ✅ NUEVO HEADER
         },
         body: body ? (esForm ? body : JSON.stringify(body)) : undefined,
       });
@@ -76,6 +80,7 @@ export async function api(path, { method = 'GET', body, params, timeoutMs = 9000
             headers: {
               ...(esForm ? {} : { 'Content-Type': 'application/json' }),
               Authorization: `Bearer ${nuevoToken}`,
+              ...(colegio ? { 'X-Institucion-Id': colegio } : {}), // ✅ NUEVO HEADER EN REINTENTO
             },
             body: body ? (esForm ? body : JSON.stringify(body)) : undefined,
           });
