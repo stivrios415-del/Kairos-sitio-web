@@ -8,12 +8,13 @@ import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL;
 const KEY_INST = 'kairos_inst';
+const KEY_RED = 'kairos_red'; // ✅ NUEVA CLAVE PARA REDES
 
 export default function Login() {
   const { modo } = useParams();
   const { login, session, perfil, errorAcceso } = useAuth();
 
-  const [inst, setInst] = useState(null); // institución validada con el código
+  const [inst, setInst] = useState(null); // institución o red validada con el código
   const [codigo, setCodigo] = useState('');
   const [tab, setTab] = useState('login');
   const [nombre, setNombre] = useState('');
@@ -24,8 +25,12 @@ export default function Login() {
   const [aviso, setAviso] = useState('');
   const [cargando, setCargando] = useState(false);
 
+  // ✅ ACTUALIZADO: Limpia también el KEY_RED
   useEffect(() => {
-    if (modo === 'independiente') sessionStorage.removeItem(KEY_INST);
+    if (modo === 'independiente') { 
+      sessionStorage.removeItem(KEY_INST); 
+      sessionStorage.removeItem(KEY_RED); 
+    }
   }, [modo]);
 
   if (modo !== 'instituto' && modo !== 'independiente') return <Navigate to="/bienvenida" replace />;
@@ -35,6 +40,7 @@ export default function Login() {
   const registro = indep && tab === 'registro';
   const color = indep ? '#469de5' : (inst?.color_primario || '#143C65');
 
+  // ✅ ACTUALIZADO: Busca si es institución o si es código de red
   const validarCodigo = async (e) => {
     e.preventDefault();
     const c = codigo.trim().toUpperCase();
@@ -45,9 +51,19 @@ export default function Login() {
       if (res.ok) {
         const i = await res.json();
         if (i.id) sessionStorage.setItem(KEY_INST, i.id);
+        sessionStorage.removeItem(KEY_RED);
         setInst(i);
       } else if (res.status === 404) {
-        setError('El código ingresado no corresponde a ninguna institución. Verifica con tu administrador.');
+        // ¿Es el código de una red de colegios?
+        const r2 = await fetch(`${API}/red/codigo/${encodeURIComponent(c)}`);
+        if (r2.ok) {
+          const red = await r2.json();
+          sessionStorage.setItem(KEY_RED, red.id);
+          sessionStorage.removeItem(KEY_INST);
+          setInst({ nombre: red.nombre });
+        } else {
+          setError('El código ingresado no corresponde a ninguna institución. Verifica con tu administrador.');
+        }
       } else {
         setError('No se pudo verificar el código. Intenta nuevamente.');
       }
@@ -56,8 +72,10 @@ export default function Login() {
     } finally { setCargando(false); }
   };
 
+  // ✅ ACTUALIZADO: Limpia ambas claves
   const cambiarInstitucion = () => {
     sessionStorage.removeItem(KEY_INST);
+    sessionStorage.removeItem(KEY_RED);
     setInst(null); setError(''); setAviso('');
   };
 
@@ -83,10 +101,12 @@ export default function Login() {
       setError(err instanceof TypeError
         ? 'No se pudo conectar con el servidor (¿CORS o servidor dormido?).'
         : err.message);
-    } finally { setCargando(false); }
+    } finally {
+      setCargando(false);
+    }
   };
 
-  // ── Paso 1 (instituto): código de institución ──
+  // ── Paso 1 (instituto): código de institución o red ──
   if (!indep && !inst) {
     return (
       <div className="codigo-page">
