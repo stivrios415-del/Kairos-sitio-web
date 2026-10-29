@@ -1,9 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import Bienvenida from './pages/Bienvenida';
 import Login from './pages/Login';
 import Vencida from './pages/Vencida';
-import Panel from './pages/Panel'; // ✅ NUEVO IMPORT
+import Panel from './pages/Panel';
+import Colegios from './pages/Colegios';
 import Asistencia from './pages/Asistencia';
 import Reportes from './pages/Reportes';
 import Estadisticas from './pages/Estadisticas';
@@ -12,20 +14,18 @@ import Clases from './pages/admin/Clases';
 import Duplicados from './pages/admin/Duplicados';
 import Estudiantes from './pages/admin/Estudiantes';
 import IndepPanel from './pages/independiente/IndepPanel';
-import Bienvenida from './pages/Bienvenida';
 
 function Protegida({ children }) {
   const { session, perfil, loading } = useAuth();
   if (loading) return <div className="center">Cargando…</div>;
-  
   if (!session || !perfil) return <Navigate to="/bienvenida" replace />;
   if (perfil.rol === 'independiente' && !perfil.activo) return <Vencida />;
   return children;
 }
 
 function SoloAdmin({ children }) {
-  const { perfil } = useAuth();
-  return perfil?.rol === 'admin' ? children : <Navigate to="/" replace />;
+  const { esAdminEfectivo } = useAuth();
+  return esAdminEfectivo ? children : <Navigate to="/" replace />;
 }
 
 function SoloInstitucional({ children }) {
@@ -33,10 +33,16 @@ function SoloInstitucional({ children }) {
   return perfil?.rol === 'independiente' ? <Navigate to="/" replace /> : children;
 }
 
-// ✅ MODIFICADO: Ahora la ruta principal muestra el Panel para institucionales
-function Inicio() {
+function SoloCoordinador({ children }) {
   const { perfil } = useAuth();
-  return perfil.rol === 'independiente' ? <IndepPanel /> : <Panel />;
+  return perfil?.rol === 'coordinador' ? children : <Navigate to="/" replace />;
+}
+
+function Inicio() {
+  const { perfil, inst } = useAuth();
+  if (perfil.rol === 'independiente') return <IndepPanel />;
+  if (perfil.rol === 'coordinador') return inst ? <Panel key={inst.id} /> : <Navigate to="/colegios" replace />;
+  return <Panel />;
 }
 
 export default function App() {
@@ -45,13 +51,10 @@ export default function App() {
       <Route path="/bienvenida" element={<Bienvenida />} />
       <Route path="/entrar/:modo" element={<Login />} />
       <Route path="/login" element={<Navigate to="/bienvenida" replace />} />
-
       <Route element={<Protegida><Layout /></Protegida>}>
         <Route path="/" element={<Inicio />} />
-        
-        {/* ✅ NUEVA RUTA: Asistencia movida a su propia URL */}
+        <Route path="/colegios" element={<SoloCoordinador><Colegios /></SoloCoordinador>} />
         <Route path="/asistencia" element={<SoloInstitucional><Asistencia /></SoloInstitucional>} />
-        
         <Route path="/reportes" element={<SoloInstitucional><Reportes /></SoloInstitucional>} />
         <Route path="/estadisticas" element={<SoloInstitucional><Estadisticas /></SoloInstitucional>} />
 
