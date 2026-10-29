@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiPlus, FiEdit2, FiTrash2, FiUser, FiBookOpen, FiRefreshCw } from 'react-icons/fi';
 import { api } from '../../lib/api';
 import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
+// ✅ NUEVO: Importación de useAuth
+import { useAuth } from '../../context/AuthContext';
 
 const VACIO = { nombre: '', descripcion: '', grado: '', seccion: '', carrera: '', profesor_id: '' };
 const conActual = (lista, valor) => (valor && !lista.includes(valor) ? [...lista, valor] : lista);
 
 export default function Clases() {
+  // ✅ NUEVO: Obtenemos la institución para saber si es rural
+  const { inst } = useAuth();
+  const rural = !!inst?.es_rural;
+
   const [materias, setMaterias] = useState([]);
   const [profesores, setProfesores] = useState([]);
   const [estudiantes, setEstudiantes] = useState([]);
@@ -52,15 +58,21 @@ export default function Clases() {
     setModal(true);
   };
 
+  // ✅ MODIFICADO: Lógica para colegios rurales
   const guardar = async (e) => {
     e.preventDefault();
-    if (!form.nombre || !form.grado || !form.seccion || !form.carrera) {
+    
+    const datos = rural ? { ...form, grado: 'Todos', seccion: 'U', carrera: 'Rural' } : form;
+    
+    if (!datos.nombre || !datos.grado || !datos.seccion || !datos.carrera) {
       return setAviso({ tipo: 'error', texto: 'Completa los campos obligatorios.' });
     }
+    
     setGuardando(true);
     try {
       await api(editando ? `/materias/${editando.id}` : '/materias', {
-        method: editando ? 'PUT' : 'POST', body: form,
+        method: editando ? 'PUT' : 'POST', 
+        body: datos, // ✅ Usamos 'datos' en lugar de 'form'
       });
       setModal(false);
       setAviso({ tipo: 'ok', texto: editando ? 'Clase actualizada.' : 'Clase creada.' });
@@ -117,21 +129,28 @@ export default function Clases() {
           <form className="form" onSubmit={guardar}>
             <label>Nombre de la clase *<input value={form.nombre} onChange={set('nombre')} required /></label>
             <label>Descripción<input value={form.descripcion} onChange={set('descripcion')} /></label>
-            <div className="row2">
-              <label>Grado *
-                <select value={form.grado} onChange={set('grado')} required>
-                  <option value="">Selecciona…</option>
-                  {conActual(grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
-                </select>
-              </label>
-              <label>Sección *<input value={form.seccion} onChange={set('seccion')} placeholder="Ej: A, 1" required /></label>
-            </div>
-            <label>Carrera *
-              <select value={form.carrera} onChange={set('carrera')} required>
-                <option value="">Selecciona…</option>
-                {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
+            
+            {/* ✅ MODIFICADO: Ocultamos Grado, Sección y Carrera si es rural */}
+            {!rural && (
+              <>
+                <div className="row2">
+                  <label>Grado *
+                    <select value={form.grado} onChange={set('grado')} required>
+                      <option value="">Selecciona…</option>
+                      {conActual(grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
+                    </select>
+                  </label>
+                  <label>Sección *<input value={form.seccion} onChange={set('seccion')} placeholder="Ej: A, 1" required /></label>
+                </div>
+                <label>Carrera *
+                  <select value={form.carrera} onChange={set('carrera')} required>
+                    <option value="">Selecciona…</option>
+                    {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              </>
+            )}
+
             <label>Profesor asignado
               <select value={form.profesor_id} onChange={set('profesor_id')}>
                 <option value="">Sin asignar</option>
