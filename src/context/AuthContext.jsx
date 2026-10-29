@@ -45,7 +45,6 @@ export function AuthProvider({ children }) {
     const headers = { Authorization: `Bearer ${s.access_token}` };
 
     // 1) Profesor / admin de un colegio
-    // ✅ FIX: Se usa .maybeSingle() para evitar el error 406
     const { data: p } = await supabase
       .from('profesores').select('id,nombre,email,rol,institucion_id,activo').eq('id', uid).maybeSingle();
     if (!vigente()) return;
@@ -62,7 +61,7 @@ export function AuthProvider({ children }) {
       try {
         const r = await fetch(`${API}/instituciones/mia`, { headers });
         if (r.ok) i = await r.json();
-      } catch { /* sin branding: colores por defecto */ }
+      } catch { /* sin branding */ }
       if (vigente()) { setInstProfesor(i); setLoading(false); }
       return;
     }
@@ -71,6 +70,7 @@ export function AuthProvider({ children }) {
     try {
       const r = await fetch(`${API}/red/mi-red`, { headers });
       if (!vigente()) return;
+      
       if (r.ok) {
         const data = await r.json();
         if (sessionStorage.getItem(KEY_INST)) return rechazar('Ese código es de un colegio. Usa el código de tu red.');
@@ -88,8 +88,9 @@ export function AuthProvider({ children }) {
         setPerfil({ id: uid, nombre: data.nombre || s.user.email, email: s.user.email, rol: 'coordinador', red: data.red });
         setLoading(false);
         return;
-      } else {
-        console.warn(`Fallo al cargar red: ${r.status} ${r.statusText}`);
+      } else if (r.status === 401) {
+        // Si el backend da 401, significa que el token es inválido o no está en la BD.
+        return rechazar('No tienes permisos de coordinador o tu sesión ha expirado.');
       }
     } catch (err) { 
       console.warn('Error de red al buscar coordinador:', err.message);
@@ -99,7 +100,9 @@ export function AuthProvider({ children }) {
     try {
       const res = await fetch(`${API}/profesor-independiente/mi-estado`, { headers });
       if (!vigente()) return;
+      
       if (!res.ok) return rechazar('Esta cuenta no tiene acceso al panel web.');
+      
       const estado = await res.json();
       const { data: n } = await supabase.from('profesores_independientes').select('nombre').eq('id', uid).single();
       if (!vigente()) return;
