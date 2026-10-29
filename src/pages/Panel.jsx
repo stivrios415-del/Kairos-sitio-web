@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   IoPeopleOutline, IoCheckmarkCircleOutline, IoCloseCircleOutline, IoSchoolOutline,
-  IoRefreshOutline, IoClipboardOutline, IoTimeOutline // ✅ Agregado para evitar el error
+  IoRefreshOutline, IoClipboardOutline, IoTimeOutline
 } from 'react-icons/io5';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -35,9 +35,14 @@ function Hace({ iso }) {
 
 export default function Panel() {
   const { perfil, inst } = useAuth();
+  // ✅ NUEVO: Verificamos si es coordinador
+  const coord = perfil.rol === 'coordinador'; 
   const esAdmin = perfil.rol === 'admin';
   const color = inst?.color_primario || '#143C65';
-  const [alcance, setAlcance] = useState('mias');
+  
+  // ✅ MODIFICADO: Por defecto, los coordinadores ven toda la institución
+  const [alcance, setAlcance] = useState(coord ? 'institucion' : 'mias'); 
+  
   const [d, setD] = useState(null);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -93,6 +98,7 @@ export default function Panel() {
           </p>
         </div>
         <div className="fila" style={{ alignItems: 'center' }}>
+          {/* ✅ NOTA: Si quieres que el coordinador también vea los botones, cambia esAdmin por (esAdmin || coord) */}
           {esAdmin && (
             <div className="seg" style={{ margin: 0 }}>
               <button type="button" className={alcance === 'mias' ? 'on' : ''} onClick={() => setAlcance('mias')}>Mis clases</button>
