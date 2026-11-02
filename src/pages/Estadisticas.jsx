@@ -4,6 +4,7 @@ import { IoStatsChartOutline, IoDownloadOutline } from 'react-icons/io5';
 import { api, fmt } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Btn } from '../components/ui';
+import EvidenciasColegio from '../components/EvidenciasColegio';
 
 const COLORES = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#6A994E', '#BC4A6C', '#F4D03F', '#5D576B', '#00A8A8', '#E65C4F'];
 
@@ -24,7 +25,8 @@ const periodo = (tipo) => {
 const PERIODOS = [['semana', 'Esta semana'], ['mes', 'Este mes'], ['trimestre', 'Trimestre'], ['año', 'Este año']];
 
 export default function Estadisticas({ global = false }) {
-  const { perfil } = useAuth();
+  // 2. Cambiamos la extracción de useAuth para incluir 'inst'
+  const { perfil, inst } = useAuth();
   const email = global ? '' : perfil.email;
 
   const [rango, setRango] = useState(() => periodo('mes'));
@@ -32,8 +34,14 @@ export default function Estadisticas({ global = false }) {
   const [cargando, setCargando] = useState(false);
   const [archivo, setArchivo] = useState(null);
   const [error, setError] = useState('');
+  
+  // 3. Agregamos el estado de consultas junto al resto del estado
+  const [consultas, setConsultas] = useState(0);
 
   const consultar = async (r = rango) => {
+    // 4. Primera línea de consultar
+    setConsultas((n) => n + 1);
+    
     setCargando(true); setError(''); setArchivo(null);
     try {
       setDatos(await api('/asistencia/estadisticas', {
@@ -79,6 +87,11 @@ export default function Estadisticas({ global = false }) {
         {error && <div className="aviso error">{error}</div>}
         {archivo && <div className="aviso ok"><a href={archivo} target="_blank" rel="noreferrer">Descargar Excel</a></div>}
       </div>
+
+      {/* 5. Insertamos el componente aquí, justo después del primer </div> (tarjeta de filtros) y antes de {pie.length > 0} */}
+      {global && inst?.es_rural && (
+        <EvidenciasColegio desde={rango[0]} hasta={rango[1]} refresco={consultas} />
+      )}
 
       {pie.length > 0 && (
         <div className="card">
