@@ -3,7 +3,7 @@ import {
   IoHomeOutline, IoSchoolOutline, IoBarChartOutline, IoAnalyticsOutline,
   IoLogOutOutline, IoBusinessOutline, IoSwapHorizontalOutline,
 } from 'react-icons/io5';
-import { FiUsers, FiBookOpen, FiCopy, FiUser, FiFileText, FiBarChart2, FiShield } from 'react-icons/fi';
+import { FiUsers, FiBookOpen, FiCopy, FiUser, FiFileText, FiBarChart2, FiShield, FiArrowUp } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
 const PROFESOR = [
@@ -11,7 +11,6 @@ const PROFESOR = [
   { to: '/asistencia', label: 'Tomar asistencia', icon: IoSchoolOutline },
   { to: '/reportes', label: 'Reportes', icon: IoBarChartOutline },
   { to: '/estadisticas', label: 'Estadísticas', icon: IoAnalyticsOutline },
-  { to: '/admin/promocion', label: 'Cierre de año', icon: FiArrowUp },
 ];
 const INDEP = [{ to: '/', label: 'Mi panel', icon: IoSchoolOutline, end: true }];
 const COORD_SIN_COLEGIO = [{ to: '/colegios', label: 'Mis colegios', icon: IoBusinessOutline }];
@@ -23,6 +22,7 @@ const ADMIN = [
   { to: '/admin/estudiantes', label: 'Estudiantes', icon: FiUser },
   { to: '/admin/reportes', label: 'Reportes globales', icon: FiFileText },
   { to: '/admin/estadisticas', label: 'Estadísticas globales', icon: FiBarChart2 },
+  { to: '/admin/promocion', label: 'Cierre de año', icon: FiArrowUp },
 ];
 
 const Item = ({ to, label, icon: Icon, end }) => (
@@ -40,7 +40,9 @@ export default function Layout() {
     : { '--p': inst?.color_primario || '#143C65', '--s': inst?.color_secundario || '#256D5B' };
 
   const items = indep ? INDEP : coord ? (inst ? COORD_CON_COLEGIO : COORD_SIN_COLEGIO) : PROFESOR;
-  const rolTexto = indep ? 'Profesor independiente' : coord ? 'Coordinador de red' : perfil.rol === 'admin' ? 'Administrador' : 'Profesor';
+  const rolTexto = indep ? 'Profesor independiente'
+    : coord ? 'Coordinador de red'
+    : perfil.rol === 'admin' ? 'Administrador' : 'Profesor';
 
   const cambiarColegio = () => { salirDeColegio(); navigate('/colegios'); };
 
