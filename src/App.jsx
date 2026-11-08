@@ -14,8 +14,6 @@ import Estudiantes from './pages/admin/Estudiantes';
 import IndepPanel from './pages/independiente/IndepPanel';
 import Bienvenida from './pages/Bienvenida';
 import Promocion from './pages/admin/Promocion'; 
-// ✅ NUEVO IMPORT: Debes crear este componente para el coordinador
-import CoordinadorPanel from './pages/coordinador/CoordinadorPanel'; 
 
 function Protegida({ children }) {
   const { session, perfil, loading } = useAuth();
@@ -28,23 +26,20 @@ function Protegida({ children }) {
 
 function SoloAdmin({ children }) {
   const { perfil } = useAuth();
+  // Si en tu base de datos el rol se llama 'coordinador' pero quieres que actúe como admin,
+  // puedes dejarlo como: perfil?.rol === 'admin' || perfil?.rol === 'coordinador'
   return perfil?.rol === 'admin' ? children : <Navigate to="/" replace />;
 }
 
-// ✅ MODIFICADO: Ahora bloquea a coordinadores de ver la asistencia de profesores
 function SoloInstitucional({ children }) {
   const { perfil } = useAuth();
-  if (perfil?.rol === 'independiente' || perfil?.rol === 'coordinador') return <Navigate to="/" replace />;
-  return children;
+  return perfil?.rol === 'independiente' ? <Navigate to="/" replace /> : children;
 }
 
-// ✅ MODIFICADO: Enrutamiento por roles en la página de Inicio
 function Inicio() {
   const { perfil } = useAuth();
-  
-  if (perfil.rol === 'independiente') return <IndepPanel />;
-  if (perfil.rol === 'coordinador') return <CoordinadorPanel />; // 👈 Nuevo panel
-  return <Panel />;
+  // Volvemos a la lógica original sin CoordinadorPanel
+  return perfil.rol === 'independiente' ? <IndepPanel /> : <Panel />;
 }
 
 export default function App() {
