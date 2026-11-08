@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-// ✅ FIX: Se agregó FiArchive
 import { FiPlus, FiEdit2, FiTrash2, FiUser, FiSearch, FiArchive } from 'react-icons/fi';
 import { api } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
 import FotoEstudiante from '../../components/FotoEstudiante';
 
 const VACIO = { cedula: '', nombre: '', apellido: '', grado: '', seccion: '', carrera: '', foto_url: '' };
+const GRADOS_RURAL = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const LIMITE = 100;
 const iniciales = (e) => `${(e.nombre || '')[0] || ''}${(e.apellido || '')[0] || ''}`.toUpperCase();
 const conActual = (lista, valor) => (valor && !lista.includes(valor) ? [...lista, valor] : lista);
 
 export default function Estudiantes() {
+  const { perfil, inst } = useAuth();
+  const rural = !!inst?.es_rural;            // depende del colegio activo
+  const coord = perfil.rol === 'coordinador';
+
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState('');
@@ -25,19 +30,20 @@ export default function Estudiantes() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    try { 
-      // ✅ FIX: Filtrar si el controlador viejo aún devuelve archivados
-      setLista((await api('/estudiantes')).filter((x) => !x.archivado)); 
-    }
-    catch (e) { setAviso({ tipo: 'error', texto: e.message }); }
+    try {
+      // El filtro de archivados es un respaldo por si el controlador viejo aún los devuelve
+      setLista((await api('/estudiantes')).filter((x) => !x.archivado));
+    } catch (e) { setAviso({ tipo: 'error', texto: e.message }); }
     finally { setCargando(false); }
-  }, []);
+  }, [inst?.id]);
   useEffect(() => { cargar(); }, [cargar]);
 
   const grados = useMemo(() => {
-    const v = [...new Set(lista.map((x) => String(x.grado)).filter(Boolean))].sort((a, b) => a - b);
-    return v.length ? v : ['7', '8', '9', '10', '11', '12'];
-  }, [lista]);
+    const datos = [...new Set(lista.map((x) => String(x.grado)).filter(Boolean))];
+    const base = rural ? GRADOS_RURAL : (datos.length ? datos : ['7', '8', '9', '10', '11', '12']);
+    return [...new Set([...base, ...datos])].sort((a, b) => a - b);
+  }, [lista, rural]);
+
   const carreras = useMemo(() => {
     const v = [...new Set(lista.map((x) => x.carrera).filter(Boolean))].sort();
     return v.length ? v : ['BCH', 'Informatica', 'Finanzas', 'Administracion'];
@@ -60,23 +66,28 @@ export default function Estudiantes() {
     setForm(e ? {
       cedula: e.cedula, nombre: e.nombre || '', apellido: e.apellido || '', grado: String(e.grado ?? ''),
       seccion: e.seccion || '', carrera: e.carrera || '', foto_url: e.foto_url || '',
-    } : VACIO);
-    setFotoPendiente(null); // ✅ Limpiar la foto pendiente al abrir el modal
+    } : { ...VACIO, seccion: rural ? 'U' : '', carrera: rural ? 'Rural' : '' });
+    setFotoPendiente(null);
     setModal(true);
   };
 
   const guardar = async (ev) => {
     ev.preventDefault();
-    if (!editando && !/^\d{13}$/.test(form.cedula)) {
+    // En un colegio rural la sección y la carrera no se piden: van con valores fijos
+    const datos = rural
+      ? { ...form, seccion: form.seccion || 'U', carrera: form.carrera || 'Rural' }
+      : form;
+
+    if (!editando && !/^\d{13}$/.test(datos.cedula)) {
       return setAviso({ tipo: 'error', texto: 'La cédula debe tener 13 dígitos.' });
     }
-    if (!form.nombre || !form.apellido || !form.grado || !form.seccion || !form.carrera) {
+    if (!datos.nombre || !datos.apellido || !datos.grado || !datos.seccion || !datos.carrera) {
       return setAviso({ tipo: 'error', texto: 'Completa todos los campos obligatorios.' });
     }
     setGuardando(true);
     try {
       await api(editando ? `/estudiantes/${editando.cedula}` : '/estudiantes', {
-        method: editando ? 'PUT' : 'POST', body: form,
+        method: editando ? 'PUT' : 'POST', body: datos,
       });
 
       let falloFoto = '';
@@ -84,7 +95,7 @@ export default function Estudiantes() {
         try {
           const fd = new FormData();
           fd.append('foto', fotoPendiente, 'foto.jpg');
-          await api(`/estudiante-fotos/${form.cedula}`, { method: 'POST', body: fd });
+          await api(`/estudiante-fotos/${datos.cedula}`, { method: 'POST', body: fd });
         } catch (e) {
           falloFoto = ` Pero la foto no se pudo subir: ${e.message}`;
         }
@@ -96,10 +107,10 @@ export default function Estudiantes() {
         texto: (editando ? 'Estudiante actualizado.' : 'Estudiante creado.') + falloFoto,
       });
       cargar();
-    } catch (err) { 
-      setAviso({ tipo: 'error', texto: err.message }); 
-    } finally { 
-      setGuardando(false); 
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: err.message });
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -112,7 +123,6 @@ export default function Estudiantes() {
     } catch (err) { setAviso({ tipo: 'error', texto: err.message }); }
   };
 
-  // ✅ NUEVA FUNCIÓN: Archivar estudiante
   const archivar = async (e) => {
     if (!window.confirm(`¿Archivar a ${e.nombre} ${e.apellido} como retirado?\nDejará de aparecer en listas y asistencia, pero su historial se conserva. Puedes restaurarlo desde "Cierre de año → Archivo".`)) return;
     try {
@@ -125,7 +135,12 @@ export default function Estudiantes() {
   return (
     <>
       <div className="top">
-        <div><h2>Estudiantes</h2><p className="sub" style={{ margin: 0 }}>{lista.length} registrados</p></div>
+        <div>
+          <h2>Estudiantes</h2>
+          <p className="sub" style={{ margin: 0 }}>
+            {coord && inst ? `${inst.nombre} · ` : ''}{lista.length} registrados
+          </p>
+        </div>
         <Btn icon={FiPlus} variant="s" onClick={() => abrir()}>Nuevo estudiante</Btn>
       </div>
 
@@ -140,12 +155,14 @@ export default function Estudiantes() {
               {grados.map((g) => <option key={g} value={g}>{g}°</option>)}
             </select>
           </label>
-          <label>Carrera
-            <select value={fCarrera} onChange={(e) => setFCarrera(e.target.value)}>
-              <option value="">Todas</option>
-              {carreras.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
+          {!rural && (
+            <label>Carrera
+              <select value={fCarrera} onChange={(e) => setFCarrera(e.target.value)}>
+                <option value="">Todas</option>
+                {carreras.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          )}
         </div>
         <Aviso aviso={aviso} />
       </div>
@@ -156,7 +173,9 @@ export default function Estudiantes() {
           : (
             <div className="scroll">
               <table>
-                <thead><tr><th>Estudiante</th><th>Cédula</th><th>Grado</th><th>Carrera</th><th></th></tr></thead>
+                <thead>
+                  <tr><th>Estudiante</th><th>Cédula</th><th>Grado</th>{!rural && <th>Carrera</th>}<th></th></tr>
+                </thead>
                 <tbody>
                   {filtrados.slice(0, LIMITE).map((e) => (
                     <tr key={e.cedula}>
@@ -167,11 +186,10 @@ export default function Estudiantes() {
                         </div>
                       </td>
                       <td>{e.cedula}</td>
-                      <td>{e.grado}° {e.seccion}</td>
-                      <td>{e.carrera}</td>
+                      <td>{rural ? `${e.grado}°` : `${e.grado}° ${e.seccion}`}</td>
+                      {!rural && <td>{e.carrera}</td>}
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <Btn icon={FiEdit2} variant="s sm" onClick={() => abrir(e)}>Editar</Btn>{' '}
-                        {/* ✅ NUEVO BOTÓN: Archivar */}
                         <Btn icon={FiArchive} variant="sec sm" onClick={() => archivar(e)} title="Archivar (retirado)" />{' '}
                         <Btn icon={FiTrash2} variant="danger sm" onClick={() => eliminar(e)} />
                       </td>
@@ -199,21 +217,33 @@ export default function Estudiantes() {
               <label>Nombre *<input value={form.nombre} onChange={set('nombre')} required /></label>
               <label>Apellido *<input value={form.apellido} onChange={set('apellido')} required /></label>
             </div>
-            <div className="row2">
+
+            {rural ? (
               <label>Grado *
                 <select value={form.grado} onChange={set('grado')} required>
                   <option value="">Selecciona…</option>
                   {conActual(grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
                 </select>
               </label>
-              <label>Sección *<input value={form.seccion} onChange={set('seccion')} placeholder="Ej: A, 1" required /></label>
-            </div>
-            <label>Carrera *
-              <select value={form.carrera} onChange={set('carrera')} required>
-                <option value="">Selecciona…</option>
-                {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
+            ) : (
+              <>
+                <div className="row2">
+                  <label>Grado *
+                    <select value={form.grado} onChange={set('grado')} required>
+                      <option value="">Selecciona…</option>
+                      {conActual(grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
+                    </select>
+                  </label>
+                  <label>Sección *<input value={form.seccion} onChange={set('seccion')} placeholder="Ej: A, 1" required /></label>
+                </div>
+                <label>Carrera *
+                  <select value={form.carrera} onChange={set('carrera')} required>
+                    <option value="">Selecciona…</option>
+                    {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              </>
+            )}
 
             <FotoEstudiante
               iniciales={iniciales(form)}
