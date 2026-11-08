@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiUser, FiSearch } from 'react-icons/fi';
+// ✅ FIX: Se agregó FiArchive
+import { FiPlus, FiEdit2, FiTrash2, FiUser, FiSearch, FiArchive } from 'react-icons/fi';
 import { api } from '../../lib/api';
 import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
 import FotoEstudiante from '../../components/FotoEstudiante';
-// ✅ NUEVO: Importación de useAuth
-import { useAuth } from '../../context/AuthContext';
 
 const VACIO = { cedula: '', nombre: '', apellido: '', grado: '', seccion: '', carrera: '', foto_url: '' };
 const LIMITE = 100;
@@ -12,11 +11,6 @@ const iniciales = (e) => `${(e.nombre || '')[0] || ''}${(e.apellido || '')[0] ||
 const conActual = (lista, valor) => (valor && !lista.includes(valor) ? [...lista, valor] : lista);
 
 export default function Estudiantes() {
-  // ✅ NUEVO: Obtenemos la institución y definimos los grados rurales
-  const { inst } = useAuth();
-  const rural = !!inst?.es_rural;
-  const GRADOS_RURAL = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState('');
@@ -31,7 +25,10 @@ export default function Estudiantes() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    try { setLista(await api('/estudiantes')); }
+    try { 
+      // ✅ FIX: Filtrar si el controlador viejo aún devuelve archivados
+      setLista((await api('/estudiantes')).filter((x) => !x.archivado)); 
+    }
     catch (e) { setAviso({ tipo: 'error', texto: e.message }); }
     finally { setCargando(false); }
   }, []);
@@ -58,14 +55,13 @@ export default function Estudiantes() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  // ✅ MODIFICADO: Pone 'Rural' por defecto al abrir el formulario vacío
   const abrir = (e = null) => {
     setEditando(e);
     setForm(e ? {
       cedula: e.cedula, nombre: e.nombre || '', apellido: e.apellido || '', grado: String(e.grado ?? ''),
       seccion: e.seccion || '', carrera: e.carrera || '', foto_url: e.foto_url || '',
-    } : { ...VACIO, carrera: rural ? 'Rural' : '' });
-    setFotoPendiente(null);
+    } : VACIO);
+    setFotoPendiente(null); // ✅ Limpiar la foto pendiente al abrir el modal
     setModal(true);
   };
 
@@ -79,11 +75,8 @@ export default function Estudiantes() {
     }
     setGuardando(true);
     try {
-      // ✅ MODIFICADO: Fuerza el valor 'Rural' al guardar si es un colegio rural
-      const datos = rural ? { ...form, carrera: 'Rural' } : form;
-
       await api(editando ? `/estudiantes/${editando.cedula}` : '/estudiantes', {
-        method: editando ? 'PUT' : 'POST', body: datos,
+        method: editando ? 'PUT' : 'POST', body: form,
       });
 
       let falloFoto = '';
@@ -119,6 +112,16 @@ export default function Estudiantes() {
     } catch (err) { setAviso({ tipo: 'error', texto: err.message }); }
   };
 
+  // ✅ NUEVA FUNCIÓN: Archivar estudiante
+  const archivar = async (e) => {
+    if (!window.confirm(`¿Archivar a ${e.nombre} ${e.apellido} como retirado?\nDejará de aparecer en listas y asistencia, pero su historial se conserva. Puedes restaurarlo desde "Cierre de año → Archivo".`)) return;
+    try {
+      await api('/promocion/archivar', { method: 'POST', body: { cedulas: [e.cedula], motivo: 'retirado' } });
+      setAviso({ tipo: 'ok', texto: 'Estudiante archivado.' });
+      cargar();
+    } catch (err) { setAviso({ tipo: 'error', texto: err.message }); }
+  };
+
   return (
     <>
       <div className="top">
@@ -137,7 +140,6 @@ export default function Estudiantes() {
               {grados.map((g) => <option key={g} value={g}>{g}°</option>)}
             </select>
           </label>
-          {/* En los filtros se mantiene la carrera normal (si aplica) */}
           <label>Carrera
             <select value={fCarrera} onChange={(e) => setFCarrera(e.target.value)}>
               <option value="">Todas</option>
@@ -169,6 +171,8 @@ export default function Estudiantes() {
                       <td>{e.carrera}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <Btn icon={FiEdit2} variant="s sm" onClick={() => abrir(e)}>Editar</Btn>{' '}
+                        {/* ✅ NUEVO BOTÓN: Archivar */}
+                        <Btn icon={FiArchive} variant="sec sm" onClick={() => archivar(e)} title="Archivar (retirado)" />{' '}
                         <Btn icon={FiTrash2} variant="danger sm" onClick={() => eliminar(e)} />
                       </td>
                     </tr>
@@ -199,22 +203,17 @@ export default function Estudiantes() {
               <label>Grado *
                 <select value={form.grado} onChange={set('grado')} required>
                   <option value="">Selecciona…</option>
-                  {/* ✅ MODIFICADO: Usa GRADOS_RURAL si es rural */}
-                  {conActual(rural ? GRADOS_RURAL : grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
+                  {conActual(grados, form.grado).map((g) => <option key={g} value={g}>{g}°</option>)}
                 </select>
               </label>
               <label>Sección *<input value={form.seccion} onChange={set('seccion')} placeholder="Ej: A, 1" required /></label>
             </div>
-            
-            {/* ✅ MODIFICADO: Oculta la carrera si es rural */}
-            {!rural && (
-              <label>Carrera *
-                <select value={form.carrera} onChange={set('carrera')} required>
-                  <option value="">Selecciona…</option>
-                  {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-            )}
+            <label>Carrera *
+              <select value={form.carrera} onChange={set('carrera')} required>
+                <option value="">Selecciona…</option>
+                {conActual(carreras, form.carrera).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
 
             <FotoEstudiante
               iniciales={iniciales(form)}
