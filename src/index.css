@@ -396,3 +396,20 @@ td{padding:10px 8px;border-bottom:1px solid #F3F4F6}
 .col-evid{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;padding:8px 12px;border-radius:10px}
 .col-evid.ok{background:var(--success-soft);color:#065F46}
 .col-evid.no{background:var(--warning-soft);color:#92400E}
+.evid-dia{margin:18px 0 10px;text-transform:capitalize;color:var(--p);font-size:14px}
+.evid-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.evid-card{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff}
+.evid-card img{width:100%;height:170px;object-fit:cover;display:block;background:#F3F4F6}
+.evid-sin{height:170px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:#F3F4F6;font-size:13px}
+.evid-info{display:flex;flex-direction:column;gap:4px;padding:10px 12px;font-size:13px}
+.evid-info span{display:flex;align-items:center;gap:5px}
+.evid-info a{color:var(--p);font-weight:600;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.evid-alerta{color:#92400E;font-weight:600}
+input[type=checkbox]{width:18px;height:18px;padding:0;accent-color:var(--p);cursor:pointer}
+.grado-card{border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:12px;background:#fff}
+.grado-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.grado-head label.chk{flex-direction:row;align-items:center;gap:10px;font-size:15px;font-weight:700;color:var(--text)}
+.destino{font-size:13px;color:var(--sec)}
+.destino.egresa{color:#92400E;font-weight:600}
+.alumnos-grado{margin-top:12px;max-height:380px;overflow:auto}
+.alumnos-grado td{padding:7px 8px}
