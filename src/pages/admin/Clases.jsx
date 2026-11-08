@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiPlus, FiEdit2, FiTrash2, FiUser, FiBookOpen, FiRefreshCw } from 'react-icons/fi';
 import { api } from '../../lib/api';
-import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
-// ✅ NUEVO: Importación de useAuth
 import { useAuth } from '../../context/AuthContext';
+import { Btn, Modal, Vacio, Aviso } from '../../components/ui';
 
 const VACIO = { nombre: '', descripcion: '', grado: '', seccion: '', carrera: '', profesor_id: '' };
+const NOMBRE_RURAL = 'Asistencia del día';
 const conActual = (lista, valor) => (valor && !lista.includes(valor) ? [...lista, valor] : lista);
 
+// Colegio rural: la clase es de TODOS los grados (se guarda como grado "Todos")
+const etiqueta = (m) => (String(m.grado) === 'Todos'
+  ? 'Todos los grados'
+  : `${m.grado}° - ${m.seccion} - ${m.carrera}`);
+
 export default function Clases() {
-  // ✅ NUEVO: Obtenemos la institución para saber si es rural
-  const { inst } = useAuth();
-  const rural = !!inst?.es_rural;
+  const { perfil, inst } = useAuth();
+  const rural = !!inst?.es_rural;            // depende del colegio activo
+  const coord = perfil.rol === 'coordinador';
 
   const [materias, setMaterias] = useState([]);
   const [profesores, setProfesores] = useState([]);
@@ -29,10 +34,11 @@ export default function Clases() {
       const [m, p, e] = await Promise.all([
         api('/materias'), api('/admin/profesores'), api('/estudiantes').catch(() => []),
       ]);
-      setMaterias(m); setProfesores(p); setEstudiantes(e);
+      setMaterias(m); setProfesores(p);
+      setEstudiantes(e.filter((x) => !x.archivado));
     } catch (err) { setAviso({ tipo: 'error', texto: err.message }); }
     finally { setCargando(false); }
-  }, []);
+  }, [inst?.id]);
   useEffect(() => { cargar(); }, [cargar]);
 
   // Grados y carreras tomados de los estudiantes reales: así la clase
@@ -54,25 +60,26 @@ export default function Clases() {
     setForm(m ? {
       nombre: m.nombre || '', descripcion: m.descripcion || '', grado: String(m.grado ?? ''),
       seccion: m.seccion || '', carrera: m.carrera || '', profesor_id: m.profesor_id || '',
-    } : VACIO);
+    } : { ...VACIO, nombre: rural ? NOMBRE_RURAL : '' });
     setModal(true);
   };
 
-  // ✅ MODIFICADO: Lógica para colegios rurales
   const guardar = async (e) => {
     e.preventDefault();
-    
+    // En un colegio rural no se piden grado, sección ni carrera
     const datos = rural ? { ...form, grado: 'Todos', seccion: 'U', carrera: 'Rural' } : form;
-    
+
     if (!datos.nombre || !datos.grado || !datos.seccion || !datos.carrera) {
       return setAviso({ tipo: 'error', texto: 'Completa los campos obligatorios.' });
     }
-    
+    if (rural && !editando && materias.length >= 1 && !window.confirm(
+      'Este colegio rural ya tiene una clase.\nCon una sola clase, el maestro ve a todos los alumnos del colegio. Crear otra duplicaría esa lista.\n\n¿Crearla de todos modos?'
+    )) return;
+
     setGuardando(true);
     try {
       await api(editando ? `/materias/${editando.id}` : '/materias', {
-        method: editando ? 'PUT' : 'POST', 
-        body: datos, // ✅ Usamos 'datos' en lugar de 'form'
+        method: editando ? 'PUT' : 'POST', body: datos,
       });
       setModal(false);
       setAviso({ tipo: 'ok', texto: editando ? 'Clase actualizada.' : 'Clase creada.' });
@@ -93,7 +100,12 @@ export default function Clases() {
   return (
     <>
       <div className="top">
-        <div><h2>Clases registradas</h2><p className="sub" style={{ margin: 0 }}>{materias.length} clases</p></div>
+        <div>
+          <h2>Clases registradas</h2>
+          <p className="sub" style={{ margin: 0 }}>
+            {coord && inst ? `${inst.nombre} · ` : ''}{materias.length} clases
+          </p>
+        </div>
         <div className="fila">
           <Btn icon={FiRefreshCw} variant="sec" onClick={cargar}>Actualizar</Btn>
           <Btn icon={FiPlus} variant="s" onClick={() => abrir()}>Nueva clase</Btn>
@@ -110,7 +122,7 @@ export default function Clases() {
               <div className="accent" />
               <div className="body">
                 <strong style={{ color: 'var(--p)', fontSize: 17 }}>{m.nombre}</strong>
-                <span className="muted">{m.grado}° - {m.seccion} - {m.carrera}</span>
+                <span className="muted">{etiqueta(m)}</span>
                 <span style={{ color: 'var(--s)', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <FiUser size={13} />{nombreProf(m.profesor_id)}
                 </span>
@@ -127,11 +139,18 @@ export default function Clases() {
       {modal && (
         <Modal titulo={editando ? 'Editar clase' : 'Nueva clase'} icon={FiBookOpen} onClose={() => setModal(false)}>
           <form className="form" onSubmit={guardar}>
-            <label>Nombre de la clase *<input value={form.nombre} onChange={set('nombre')} required /></label>
+            <label>Nombre de la clase *
+              <input value={form.nombre} onChange={set('nombre')}
+                placeholder={rural ? NOMBRE_RURAL : ''} required />
+            </label>
             <label>Descripción<input value={form.descripcion} onChange={set('descripcion')} /></label>
-            
-            {/* ✅ MODIFICADO: Ocultamos Grado, Sección y Carrera si es rural */}
-            {!rural && (
+
+            {rural ? (
+              <p className="muted" style={{ margin: 0 }}>
+                Colegio rural: el maestro verá a <strong>todos los alumnos del colegio</strong> en esta clase,
+                sin importar el grado.
+              </p>
+            ) : (
               <>
                 <div className="row2">
                   <label>Grado *
@@ -151,7 +170,7 @@ export default function Clases() {
               </>
             )}
 
-            <label>Profesor asignado
+            <label>{rural ? 'Maestro asignado' : 'Profesor asignado'}
               <select value={form.profesor_id} onChange={set('profesor_id')}>
                 <option value="">Sin asignar</option>
                 {profesores.filter((p) => p.activo || p.id === form.profesor_id).map((p) => (
@@ -159,6 +178,10 @@ export default function Clases() {
                 ))}
               </select>
             </label>
+            {rural && !form.profesor_id && (
+              <span className="muted">Sin maestro asignado, nadie verá esta clase en la app.</span>
+            )}
+
             <div className="fila">
               <Btn type="button" variant="sec" onClick={() => setModal(false)}>Cancelar</Btn>
               <Btn variant="s" disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</Btn>
