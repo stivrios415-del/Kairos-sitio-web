@@ -3,7 +3,7 @@ import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Vencida from './pages/Vencida';
-import Panel from './pages/Panel'; // ✅ NUEVO IMPORT
+import Panel from './pages/Panel'; 
 import Asistencia from './pages/Asistencia';
 import Reportes from './pages/Reportes';
 import Estadisticas from './pages/Estadisticas';
@@ -13,8 +13,9 @@ import Duplicados from './pages/admin/Duplicados';
 import Estudiantes from './pages/admin/Estudiantes';
 import IndepPanel from './pages/independiente/IndepPanel';
 import Bienvenida from './pages/Bienvenida';
-// ✅ NUEVO IMPORT: Página de promoción
 import Promocion from './pages/admin/Promocion'; 
+// ✅ NUEVO IMPORT: Debes crear este componente para el coordinador
+import CoordinadorPanel from './pages/coordinador/CoordinadorPanel'; 
 
 function Protegida({ children }) {
   const { session, perfil, loading } = useAuth();
@@ -30,15 +31,20 @@ function SoloAdmin({ children }) {
   return perfil?.rol === 'admin' ? children : <Navigate to="/" replace />;
 }
 
+// ✅ MODIFICADO: Ahora bloquea a coordinadores de ver la asistencia de profesores
 function SoloInstitucional({ children }) {
   const { perfil } = useAuth();
-  return perfil?.rol === 'independiente' ? <Navigate to="/" replace /> : children;
+  if (perfil?.rol === 'independiente' || perfil?.rol === 'coordinador') return <Navigate to="/" replace />;
+  return children;
 }
 
-// ✅ MODIFICADO: Ahora la ruta principal muestra el Panel para institucionales
+// ✅ MODIFICADO: Enrutamiento por roles en la página de Inicio
 function Inicio() {
   const { perfil } = useAuth();
-  return perfil.rol === 'independiente' ? <IndepPanel /> : <Panel />;
+  
+  if (perfil.rol === 'independiente') return <IndepPanel />;
+  if (perfil.rol === 'coordinador') return <CoordinadorPanel />; // 👈 Nuevo panel
+  return <Panel />;
 }
 
 export default function App() {
@@ -51,9 +57,7 @@ export default function App() {
       <Route element={<Protegida><Layout /></Protegida>}>
         <Route path="/" element={<Inicio />} />
         
-        {/* ✅ NUEVA RUTA: Asistencia movida a su propia URL */}
         <Route path="/asistencia" element={<SoloInstitucional><Asistencia /></SoloInstitucional>} />
-        
         <Route path="/reportes" element={<SoloInstitucional><Reportes /></SoloInstitucional>} />
         <Route path="/estadisticas" element={<SoloInstitucional><Estadisticas /></SoloInstitucional>} />
 
@@ -63,7 +67,6 @@ export default function App() {
         <Route path="/admin/estudiantes" element={<SoloAdmin><Estudiantes /></SoloAdmin>} />
         <Route path="/admin/reportes" element={<SoloAdmin><Reportes key="global" global /></SoloAdmin>} />
         <Route path="/admin/estadisticas" element={<SoloAdmin><Estadisticas key="global" global /></SoloAdmin>} />
-        {/* ✅ NUEVA RUTA: Promoción */}
         <Route path="/admin/promocion" element={<SoloAdmin><Promocion /></SoloAdmin>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
