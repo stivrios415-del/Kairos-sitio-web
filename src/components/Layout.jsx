@@ -1,7 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-// ✅ FIX: Se agregó IoHomeOutline aquí
 import { IoHomeOutline, IoSchoolOutline, IoBarChartOutline, IoAnalyticsOutline, IoLogOutOutline } from 'react-icons/io5';
-// ✅ FIX: Se agregó FiArrowUp aquí
 import { FiUsers, FiBookOpen, FiCopy, FiUser, FiFileText, FiBarChart2, FiShield, FiArrowUp } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,6 +11,7 @@ const PROFESOR = [
 ];
 
 const INDEP = [{ to: '/', label: 'Mi panel', icon: IoSchoolOutline, end: true }];
+
 const ADMIN = [
   { to: '/admin/profesores', label: 'Profesores', icon: FiUsers },
   { to: '/admin/clases', label: 'Clases', icon: FiBookOpen },
@@ -20,7 +19,6 @@ const ADMIN = [
   { to: '/admin/estudiantes', label: 'Estudiantes', icon: FiUser },
   { to: '/admin/reportes', label: 'Reportes globales', icon: FiFileText },
   { to: '/admin/estadisticas', label: 'Estadísticas globales', icon: FiBarChart2 },
-  // ✅ NUEVO: Ruta de promoción
   { to: '/admin/promocion', label: 'Cierre de año', icon: FiArrowUp },
 ];
 
@@ -31,6 +29,7 @@ const Item = ({ to, label, icon: Icon, end }) => (
 export default function Layout() {
   const { perfil, inst, logout } = useAuth();
   const indep = perfil.rol === 'independiente';
+  
   const style = indep
     ? { '--p': '#469de5', '--s': '#10B981' }
     : { '--p': inst?.color_primario || '#143C65', '--s': inst?.color_secundario || '#256D5B' };
@@ -47,7 +46,10 @@ export default function Layout() {
         </div>
         <nav>
           {!indep && <span className="navsec">Profesor</span>}
+          
           {(indep ? INDEP : PROFESOR).map((i) => <Item key={i.to} {...i} />)}
+          
+          {/* Menú de administrador */}
           {perfil.rol === 'admin' && (
             <>
               <span className="navsec"><FiShield size={12} /> Administración</span>
