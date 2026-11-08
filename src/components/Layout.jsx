@@ -11,6 +11,7 @@ const PROFESOR = [
   { to: '/asistencia', label: 'Tomar asistencia', icon: IoSchoolOutline },
   { to: '/reportes', label: 'Reportes', icon: IoBarChartOutline },
   { to: '/estadisticas', label: 'Estadísticas', icon: IoAnalyticsOutline },
+  { to: '/admin/promocion', label: 'Cierre de año', icon: FiArrowUp },
 ];
 const INDEP = [{ to: '/', label: 'Mi panel', icon: IoSchoolOutline, end: true }];
 const COORD_SIN_COLEGIO = [{ to: '/colegios', label: 'Mis colegios', icon: IoBusinessOutline }];
